@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GameShell, GameTopbar } from "@freeappstore/games";
+import { GameShell, GameTopbar } from "@freegamestore/games";
 
 const FLIP_DURATION_MS = 700;
 
