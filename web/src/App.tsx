@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GameShell, GameTopbar } from "@freegamestore/games";
+import { GameShell, GameTopbar, GameAuth } from "@freegamestore/games";
 
 const FLIP_DURATION_MS = 700;
 
@@ -32,6 +32,7 @@ export default function App() {
             { label: "Heads", value: heads },
             { label: "Tails", value: tails },
           ]}
+          actions={<GameAuth />}
         />
       }
     >
