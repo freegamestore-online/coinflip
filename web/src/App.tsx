@@ -33,6 +33,7 @@ export default function App() {
             { label: "Tails", value: tails },
           ]}
           actions={<GameAuth />}
+          rules={<div><h3 style={{fontWeight:700}}>Coin Flip</h3><h4 style={{fontWeight:600}}>How to Play</h4><ul><li>Tap the coin to flip it</li><li>Result is heads or tails</li></ul><h4 style={{fontWeight:600}}>Tracking</h4><ul><li>Tracks last 20 results</li><li>Running totals for heads and tails</li></ul></div>}
         />
       }
     >
