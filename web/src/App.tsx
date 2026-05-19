@@ -1,22 +1,41 @@
-import { useState } from "react";
-import { GameShell, GameTopbar, GameAuth } from "@freegamestore/games";
+import { useRef, useState } from "react";
+import { GameShell, GameTopbar, GameAuth, useGameSounds } from "@freegamestore/games";
 
 const FLIP_DURATION_MS = 700;
+
+type SoundsApi = ReturnType<typeof useGameSounds>;
+
+function AudioBridge({ apiRef }: { apiRef: React.MutableRefObject<SoundsApi | null> }) {
+  const sounds = useGameSounds();
+  apiRef.current = sounds;
+  return null;
+}
 
 export default function App() {
   const [face, setFace] = useState<"heads" | "tails" | null>(null);
   const [flipping, setFlipping] = useState(false);
   const [history, setHistory] = useState<("heads" | "tails")[]>([]);
+  const [guess, setGuess] = useState<"heads" | "tails" | null>(null);
+  const audioRef = useRef<SoundsApi | null>(null);
 
   function flip() {
     if (flipping) return;
     setFlipping(true);
+    audioRef.current?.playTick();
     // Decide the result up-front so the spin animation lands on it.
     const result: "heads" | "tails" = Math.random() < 0.5 ? "heads" : "tails";
+    const userGuess = guess;
     window.setTimeout(() => {
       setFace(result);
       setHistory((prev) => [result, ...prev].slice(0, 20));
       setFlipping(false);
+      if (userGuess) {
+        if (userGuess === result) audioRef.current?.playScore();
+        else audioRef.current?.playError();
+      } else {
+        // No guess called — still acknowledge the flip landed.
+        audioRef.current?.playScore();
+      }
     }, FLIP_DURATION_MS);
   }
 
@@ -37,8 +56,37 @@ export default function App() {
         />
       }
     >
+      <AudioBridge apiRef={audioRef} />
       <div className="relative w-full h-full">
         <div style={{ maxWidth: "480px", margin: "0 auto", padding: "1.5rem 0", textAlign: "center" }}>
+          <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginBottom: "1.5rem" }}>
+            {(["heads", "tails"] as const).map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => !flipping && setGuess(guess === opt ? null : opt)}
+                disabled={flipping}
+                aria-pressed={guess === opt}
+                style={{
+                  padding: "0.5rem 1rem",
+                  minHeight: "2.5rem",
+                  border: "1px solid var(--line)",
+                  borderRadius: "0.5rem",
+                  background: guess === opt ? "var(--accent)" : "transparent",
+                  color: guess === opt ? "white" : "var(--ink)",
+                  fontFamily: "inherit",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  cursor: flipping ? "wait" : "pointer",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                Call {opt}
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
             onClick={flip}
