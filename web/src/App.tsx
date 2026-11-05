@@ -1,7 +1,31 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GameShell, GameTopbar, GameAuth, useGameSounds } from "@freegamestore/games";
 
 const FLIP_DURATION_MS = 700;
+const HISTORY_LENGTH = 20;
+const STATS_KEY = "coinflip-stats";
+
+type Face = "heads" | "tails";
+interface Stats { heads: number; tails: number; history: Face[]; }
+const EMPTY_STATS: Stats = { heads: 0, tails: 0, history: [] };
+
+function loadStats(): Stats {
+  try {
+    const s = JSON.parse(localStorage.getItem(STATS_KEY) ?? "null") as Stats | null;
+    return s && Array.isArray(s.history) ? s : EMPTY_STATS;
+  } catch {
+    return EMPTY_STATS;
+  }
+}
+
+/** Add a flip: unbounded totals, history capped to the last HISTORY_LENGTH. */
+function addFlip(stats: Stats, face: Face): Stats {
+  return {
+    ...stats,
+    [face]: stats[face] + 1,
+    history: [face, ...stats.history].slice(0, HISTORY_LENGTH),
+  };
+}
 
 type SoundsApi = ReturnType<typeof useGameSounds>;
 
@@ -12,22 +36,29 @@ function AudioBridge({ apiRef }: { apiRef: React.MutableRefObject<SoundsApi | nu
 }
 
 export default function App() {
-  const [face, setFace] = useState<"heads" | "tails" | null>(null);
+  const [face, setFace] = useState<Face | null>(null);
   const [flipping, setFlipping] = useState(false);
-  const [history, setHistory] = useState<("heads" | "tails")[]>([]);
-  const [guess, setGuess] = useState<"heads" | "tails" | null>(null);
+  // Total half-turns spun so far; only ever grows so the coin never spins back.
+  const [spins, setSpins] = useState(0);
+  const [stats, setStats] = useState(loadStats);
+  const [guess, setGuess] = useState<Face | null>(null);
   const audioRef = useRef<SoundsApi | null>(null);
+  const timerRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); }, [stats]);
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
   function flip() {
     if (flipping) return;
     setFlipping(true);
+    setSpins((n) => n + 6);
     audioRef.current?.playTick();
     // Decide the result up-front so the spin animation lands on it.
-    const result: "heads" | "tails" = Math.random() < 0.5 ? "heads" : "tails";
+    const result: Face = Math.random() < 0.5 ? "heads" : "tails";
     const userGuess = guess;
-    window.setTimeout(() => {
+    timerRef.current = window.setTimeout(() => {
       setFace(result);
-      setHistory((prev) => [result, ...prev].slice(0, 20));
+      setStats((prev) => addFlip(prev, result));
       setFlipping(false);
       if (userGuess) {
         if (userGuess === result) audioRef.current?.playScore();
@@ -39,8 +70,24 @@ export default function App() {
     }, FLIP_DURATION_MS);
   }
 
-  const heads = history.filter((h) => h === "heads").length;
-  const tails = history.length - heads;
+  function resetStats() {
+    setStats(EMPTY_STATS);
+    setFace(null);
+  }
+
+  // Space flips (unless a button has focus — it then activates natively).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      if (e.target instanceof Element && e.target.closest("button, a, input, textarea, select")) return;
+      e.preventDefault();
+      flip();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  const { heads, tails, history } = stats;
 
   return (
     <GameShell
@@ -51,8 +98,9 @@ export default function App() {
             { label: "Heads", value: heads },
             { label: "Tails", value: tails },
           ]}
+          onRestart={resetStats}
           actions={<GameAuth />}
-          rules={<div><h3 style={{fontWeight:700}}>Coin Flip</h3><h4 style={{fontWeight:600}}>How to Play</h4><ul><li>Tap the coin to flip it</li><li>Result is heads or tails</li></ul><h4 style={{fontWeight:600}}>Tracking</h4><ul><li>Tracks last 20 results</li><li>Running totals for heads and tails</li></ul></div>}
+          rules={<div><h3 style={{fontWeight:700}}>Coin Flip</h3><h4 style={{fontWeight:600}}>How to Play</h4><ul><li>Tap the coin (or press Space) to flip it</li><li>Result is heads or tails</li></ul><h4 style={{fontWeight:600}}>Tracking</h4><ul><li>Tracks last 20 results</li><li>Running totals for heads and tails (saved on this device; Restart clears them)</li></ul></div>}
         />
       }
     >
@@ -104,7 +152,7 @@ export default function App() {
               color: "var(--ink)",
               cursor: flipping ? "wait" : "pointer",
               transition: "transform 0.7s cubic-bezier(.2,.8,.4,1)",
-              transform: flipping ? "rotateY(1080deg)" : "rotateY(0deg)",
+              transform: `perspective(600px) rotateY(${spins * 180}deg)`,
               margin: "0 auto",
               display: "block",
             }}
@@ -115,7 +163,7 @@ export default function App() {
           <div style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginTop: "2rem" }}>
             <Stat label="Heads" value={heads} />
             <Stat label="Tails" value={tails} />
-            <Stat label="Total" value={history.length} />
+            <Stat label="Total" value={heads + tails} />
           </div>
 
           {history.length > 0 && (

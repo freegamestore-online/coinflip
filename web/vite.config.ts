@@ -37,7 +37,7 @@ export default defineConfig({
       manifest: {
         name: "coinflip",
         short_name: "coinflip",
-        description: "coinflip — free forever",
+        description: "Free coin flip — part of FreeGameStore",
         start_url: "/",
         display: "standalone", orientation: "any",
         background_color: "#0f0f0f",
